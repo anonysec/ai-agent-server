@@ -2,7 +2,7 @@
 
 **Full SSH-like remote control for your server using simple `curl` commands.**
 
-> **Repo:** [anoneysec/ai-agent-server](https://github.com/anoneysec/ai-agent-server)
+> **Repo:** [anonysec/ai-agent-server](https://github.com/anonysec/ai-agent-server)
 
 The AI (or you) can execute **any shell command** on the machine — just like SSH, but via HTTP + 4-digit token.
 
@@ -24,10 +24,10 @@ The AI (or you) can execute **any shell command** on the machine — just like S
 
 ```bash
 # Default token (7722)
-curl -fsSL https://raw.githubusercontent.com/anoneysec/ai-agent-server/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/anonysec/ai-agent-server/main/install.sh | bash
 
 # With your own 4-digit token
-curl -fsSL https://raw.githubusercontent.com/anoneysec/ai-agent-server/main/install.sh | bash -s -- 8847
+curl -fsSL https://raw.githubusercontent.com/anonysec/ai-agent-server/main/install.sh | bash -s -- 8847
 ```
 
 **Local install (from zip):**
@@ -88,7 +88,7 @@ Completely removes the agent and stops auto-start:
 
 ```bash
 # Using curl
-curl -fsSL https://raw.githubusercontent.com/anoneysec/ai-agent-server/main/install.sh | bash -s -- uninstall
+curl -fsSL https://raw.githubusercontent.com/anonysec/ai-agent-server/main/install.sh | bash -s -- uninstall
 
 # Or locally
 bash install.sh uninstall
