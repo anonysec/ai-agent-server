@@ -35,3 +35,22 @@ curl -X POST -H "Authorization: Bearer 8844" \
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/anonysec/ai-agent-server/main/install.sh) uninstall
 ```
+
+## Prompt
+
+```bash
+Use the AI Agent Server for any task requiring shell, files, or system access.
+
+Rules:
+• Inspect first.
+• Never assume.
+• Execute, don't describe.
+• Minimize reads/writes.
+• Verify changes.
+• Never invent output.
+• Report errors exactly.
+• Avoid destructive actions.
+
+Server/Token:
+
+```
