@@ -1,64 +1,51 @@
 #!/bin/bash
 #
-# ========================================================
-#  AI Agent Server - Full Auto Installer
-#  Repo: anoneysec/ai-agent-server
-# ========================================================
+# AI Agent Server - Fully Automated Installer
+# Repo: anonysec/ai-agent-server
 #
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/anoneysec/ai-agent-server/main/install.sh | bash
-#   curl -fsSL ... | bash -s -- 8847
-#   bash install.sh 7722
-#   bash install.sh uninstall
+# Exact usage:
+#   bash <(curl -s https://raw.githubusercontent.com/anonysec/ai-agent-server/main/install.sh) 8844
+#
+# Uninstall:
+#   bash <(curl -s https://raw.githubusercontent.com/anonysec/ai-agent-server/main/install.sh) uninstall
 #
 
 set -e
 
-REPO="anoneysec/ai-agent-server"
+REPO="anonysec/ai-agent-server"
 INSTALL_DIR="$HOME/ai-agent-server"
 SERVICE_NAME="ai-agent-server"
 DEFAULT_TOKEN="7722"
 
-# --- Handle uninstall ---
+TOKEN="$DEFAULT_TOKEN"
+ACTION="install"
+
 if [[ "$1" == "uninstall" ]]; then
-    echo "🛑 Uninstalling AI Agent Server..."
-    
-    # Stop and disable service
-    if command -v systemctl &> /dev/null; then
+    ACTION="uninstall"
+elif [[ "$1" =~ ^[0-9]{4}$ ]]; then
+    TOKEN="$1"
+elif [ -n "$1" ]; then
+    echo "❌ Invalid argument: $1"
+    echo "Usage: bash <(curl -s .../install.sh) 8844"
+    exit 1
+fi
+
+if [ "$ACTION" = "uninstall" ]; then
+    echo "🛑 Uninstalling..."
+    if command -v systemctl &>/dev/null; then
         sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
         sudo systemctl disable "$SERVICE_NAME" 2>/dev/null || true
         sudo rm -f /etc/systemd/system/"$SERVICE_NAME".service
         sudo systemctl daemon-reload 2>/dev/null || true
     fi
-    
-    # Kill any running process
     pkill -f "agent_server.py" 2>/dev/null || true
-    
-    # Remove installation
     rm -rf "$INSTALL_DIR"
-    
-    echo "✅ Uninstalled successfully."
-    echo "   (Token revoked - service stopped)"
+    echo "✅ Uninstalled. Token revoked."
     exit 0
 fi
 
-# --- Normal install ---
-
-# Get token
-if [ -n "$1" ] && [[ "$1" =~ ^[0-9]{4}$ ]]; then
-    TOKEN="$1"
-else
-    read -p "Enter 4-digit token (default: $DEFAULT_TOKEN): " INPUT
-    TOKEN="${INPUT:-$DEFAULT_TOKEN}"
-fi
-
-if ! [[ "$TOKEN" =~ ^[0-9]{4}$ ]]; then
-    echo "⚠️  Invalid token. Using default: $DEFAULT_TOKEN"
-    TOKEN="$DEFAULT_TOKEN"
-fi
-
 echo "=============================================="
-echo "🤖 AI Agent Server Installer"
+echo "🤖 AI Agent Server - Automated Installer"
 echo "   Repo: $REPO"
 echo "   Token: $TOKEN"
 echo "=============================================="
@@ -66,82 +53,79 @@ echo "=============================================="
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# Download from GitHub
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO/main"
 GOT_FILES=false
 
-echo ""
-echo "📥 Downloading latest files..."
-
 if curl -fsSL "$GITHUB_RAW/agent_server.py" -o agent_server.py 2>/dev/null; then
     curl -fsSL "$GITHUB_RAW/README.md" -o README.md 2>/dev/null || true
-    curl -fsSL "$GITHUB_RAW/examples.md" -o examples.md 2>/dev/null || true
     GOT_FILES=true
     echo "✅ Downloaded from GitHub"
 fi
 
-# Fallback to local zip
 if [ "$GOT_FILES" = false ]; then
-    echo "📦 Using local files..."
-    if [ -f "agent_server.py" ]; then
-        echo "✅ Using existing files"
-    else
-        ZIP=""
-        for p in "$HOME/ai-agent-server.zip" "./ai-agent-server.zip" "/tmp/ai-agent-server.zip" "$HOME/Downloads/ai-agent-server.zip"; do
-            [ -f "$p" ] && ZIP="$p" && break
-        done
-
-        if [ -n "$ZIP" ]; then
-            echo "📦 Extracting $ZIP..."
-            rm -rf /tmp/ai-tmp
-            unzip -o "$ZIP" -d /tmp/ai-tmp >/dev/null 2>&1 || true
-            if [ -d /tmp/ai-tmp/ai-agent-server ]; then
-                cp -r /tmp/ai-tmp/ai-agent-server/* .
-            else
-                cp -r /tmp/ai-tmp/* .
-            fi
-            rm -rf /tmp/ai-tmp
-        else
-            echo "❌ Could not find source. Please run from extracted folder."
-            exit 1
-        fi
-    fi
+    echo "📦 Using embedded version..."
+    cat > agent_server.py << 'PYEOF'
+#!/usr/bin/env python3
+import http.server, socketserver, json, subprocess, os, urllib.parse
+from datetime import datetime
+PORT=8080; HOST="0.0.0.0"; AUTH_TOKEN="7722"
+class H(http.server.BaseHTTPRequestHandler):
+    def _j(self,d,s=200): self.send_response(s);self.send_header("Content-Type","application/json");self.end_headers();self.wfile.write(json.dumps(d,indent=2).encode())
+    def _auth(self):
+        a=self.headers.get("Authorization","")
+        if a.startswith("Bearer "): return a.replace("Bearer ","").strip()==AUTH_TOKEN
+        if "token=" in self.path: return urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("token",[""])[0]==AUTH_TOKEN
+        return False
+    def do_GET(self):
+        if not self._auth(): return self._j({"error":"Unauthorized"},401)
+        p=urllib.parse.urlparse(self.path).path
+        if p in ("/","/status"): self._j({"status":"ok","message":"AI Agent Server","repo":"anonysec/ai-agent-server"})
+        elif p=="/run":
+            c=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("cmd",[""])[0]
+            if c: self._run(c)
+            else: self._j({"error":"Missing cmd"},400)
+        else: self._j({"error":"Not found"},404)
+    def do_POST(self):
+        if not self._auth(): return self._j({"error":"Unauthorized"},401)
+        if self.path!="/exec": return self._j({"error":"Use /exec"},404)
+        l=int(self.headers.get("Content-Length",0))
+        b=self.rfile.read(l).decode()
+        c=None
+        try: c=json.loads(b).get("command")
+        except: pass
+        if not c: c=urllib.parse.parse_qs(b).get("command",[""])[0]
+        if c: self._run(c)
+        else: self._j({"error":"No command"},400)
+    def _run(self,cmd):
+        try:
+            r=subprocess.run(cmd,shell=True,capture_output=True,text=True,timeout=45)
+            self._j({"success":r.returncode==0,"stdout":r.stdout.strip(),"stderr":r.stderr.strip()})
+        except Exception as e: self._j({"error":str(e)},500)
+if __name__=="__main__": print(f"AI Agent Server started (token: {AUTH_TOKEN})"); socketserver.TCPServer((HOST,PORT),H).serve_forever()
+PYEOF
 fi
 
-# Patch token
-echo "🔐 Setting token to $TOKEN..."
 sed -i "s/AUTH_TOKEN = \"[0-9]\{4\}\"/AUTH_TOKEN = \"$TOKEN\"/" agent_server.py 2>/dev/null || true
-sed -i "s/AUTH_TOKEN = '[0-9]\{4\}'/AUTH_TOKEN = '$TOKEN'/" agent_server.py 2>/dev/null || true
+chmod +x agent_server.py
 
-chmod +x agent_server.py 2>/dev/null || true
-
-# Create run scripts
-cat > run.sh << 'RUN'
+cat > run.sh << 'R'
 #!/bin/bash
-TOKEN=$(grep -oP 'AUTH_TOKEN = "\K[0-9]+' agent_server.py 2>/dev/null || echo "7722")
-echo "🚀 Starting AI Agent Server (anoneysec/ai-agent-server)"
-echo "   Token: $TOKEN"
-echo ""
-echo "Test commands:"
-echo "  curl -H \"Authorization: Bearer $TOKEN\" http://localhost:8080/status"
-echo ""
+T=$(grep -oP 'AUTH_TOKEN = "\K[0-9]+' agent_server.py 2>/dev/null || echo "7722")
+echo "Token: $T"
 python3 agent_server.py
-RUN
+R
 chmod +x run.sh
 
-cat > start.sh << 'START'
+cat > start.sh << 'S'
 #!/bin/bash
 python3 agent_server.py
-START
+S
 chmod +x start.sh
 
-# Create systemd service
-echo "⚙️  Creating systemd service..."
 cat > "$SERVICE_NAME.service" << SERV
 [Unit]
-Description=Full Access AI Agent Server (anoneysec/ai-agent-server)
+Description=AI Agent Server (anonysec/ai-agent-server)
 After=network.target
-
 [Service]
 Type=simple
 User=$(whoami)
@@ -149,57 +133,29 @@ WorkingDirectory=$(pwd)
 ExecStart=/usr/bin/env python3 $(pwd)/agent_server.py
 Restart=always
 RestartSec=5
-StandardOutput=append:$(pwd)/agent.log
-StandardError=append:$(pwd)/agent.log
-
 [Install]
 WantedBy=multi-user.target
 SERV
 
-# Install and enable service
-echo "🚀 Installing and enabling auto-start..."
-sudo cp "$SERVICE_NAME.service" /etc/systemd/system/ 2>/dev/null || {
-    echo "⚠️  Could not copy service file (no sudo). Starting manually..."
-}
-
-if command -v systemctl &> /dev/null; then
+echo "🚀 Enabling auto-start..."
+if command -v systemctl &>/dev/null; then
+    sudo cp "$SERVICE_NAME.service" /etc/systemd/system/ 2>/dev/null || true
     sudo systemctl daemon-reload 2>/dev/null || true
     sudo systemctl enable "$SERVICE_NAME" 2>/dev/null || true
     sudo systemctl start "$SERVICE_NAME" 2>/dev/null || true
-    echo "✅ Service enabled and started (auto-start on boot)"
+    echo "✅ Auto-start enabled"
 else
-    echo "⚠️  systemd not found. Starting manually..."
-fi
-
-# Start immediately if not using systemd
-if ! systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo "▶️  Starting server in background..."
     nohup python3 agent_server.py > agent.log 2>&1 &
-    sleep 1
 fi
 
 echo ""
-echo "=============================================="
-echo "✅ Installation Complete & Running!"
-echo "=============================================="
+echo "✅ Installation Complete!"
+echo "   Location : $INSTALL_DIR"
+echo "   Token    : $TOKEN"
 echo ""
-echo "📍 Installed to : $INSTALL_DIR"
-echo "🔑 Token        : $TOKEN"
-echo "🔄 Auto-start   : Enabled (systemd)"
+echo "Test:"
+echo "  curl -H \"Authorization: Bearer $TOKEN\" http://localhost:8080/status"
 echo ""
-echo "📊 Status:"
-echo "   curl -H \"Authorization: Bearer $TOKEN\" http://localhost:8080/status"
-echo ""
-echo "📌 Run command:"
-echo "   curl -X POST -H \"Authorization: Bearer $TOKEN\" \\"
-echo "        -d 'command=whoami && uptime' http://localhost:8080/exec"
-echo ""
-echo "🛑 To uninstall + revoke token:"
-echo "   curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | bash -s -- uninstall"
-echo "   # or"
-echo "   bash install.sh uninstall"
-echo ""
-echo "📜 Logs:"
-echo "   tail -f $INSTALL_DIR/agent.log"
-echo ""
+echo "Uninstall:"
+echo "  bash <(curl -s https://raw.githubusercontent.com/$REPO/main/install.sh) uninstall"
 echo "=============================================="

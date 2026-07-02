@@ -1,14 +1,12 @@
 [Unit]
-Description=Full Access AI Agent Server
+Description=AI Agent Server (anonysec/ai-agent-server)
 After=network.target
-
 [Service]
 Type=simple
-User=user
-WorkingDirectory=/home/user/ai-agent-server
-ExecStart=/usr/bin/env python3 /home/user/ai-agent-server/agent_server.py
+User=$(whoami)
+WorkingDirectory=$(pwd)
+ExecStart=/usr/bin/env python3 $(pwd)/agent_server.py
 Restart=always
 RestartSec=5
-
 [Install]
 WantedBy=multi-user.target
